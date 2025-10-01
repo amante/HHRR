@@ -1,16 +1,17 @@
-# MoMa HR — v1 (para GitHub Pages en `amante.github.io/HHRR`)
+# MoMa HR — v1.1 con Administración (GitHub Pages listo)
 
-Este repo está listo para publicarse en **GitHub Pages** como **Project Site** en tu cuenta `amante.github.io`, repositorio **HHRR**.
+Perfiles: **Admin**, **Empresa**, **Usuario**.  
+El **Admin** puede ver y gestionar (cambiar estado) las **solicitudes** (tareas) de todas las empresas.
 
-## URL final
+## URL esperada del proyecto
 - https://amante.github.io/HHRR/
 
 ## Estructura
 ```
 HHRR/
 ├─ index.html
-├─ 404.html                # fallback (útil para SPAs o enlaces profundos)
-├─ .nojekyll               # evita procesamiento de Jekyll
+├─ 404.html
+├─ .nojekyll
 ├─ assets/
 │  ├─ js/app.jsx
 │  ├─ css/styles.css
@@ -18,23 +19,20 @@ HHRR/
 └─ .github/workflows/pages.yml
 ```
 
-## Publicación automática (GitHub Actions)
-Ya viene configurado el workflow **`.github/workflows/pages.yml`** que, al **hacer push a `main`**, despliega el sitio a GitHub Pages. No requiere build (solo HTML/JS/CSS estático).
-
-### Pasos
-1. Crea el repo en GitHub: **HHRR** (público o privado con Pages activado).
-2. Sube todos los archivos de este ZIP a la rama **main**.
-3. Ve a **Actions** del repo y verifica la ejecución **Deploy to GitHub Pages**.  
-   Al terminar, tu sitio quedará disponible en **https://amante.github.io/HHRR/**.
-
-> Si prefieres no usar Actions, también puedes ir a **Settings → Pages → Build and deployment** y elegir **Deploy from a branch** con **Branch: `main` / Folder: `/ (root)`**. En ese caso puedes borrar el workflow.
-
 ## Credenciales demo
-- Empresa: `empresa@demo.com` / `123456`  
+- Admin:   `admin@demo.com`   / `123456`
+- Empresa: `empresa@demo.com` / `123456`
 - Usuario: `usuario@demo.com` / `123456`
 
-> La demo usa CDN de React, ReactDOM, Babel y Tailwind, por lo que el sitio necesita salida a Internet. Los datos persisten en `localStorage` del navegador.
+## Cómo publicar
+1. Crea (o usa) el repo **HHRR** en `amante.github.io`.
+2. Sube el contenido del ZIP a la rama **main**.
+3. Revisa **Actions** → *Deploy to GitHub Pages*.
+4. Verás el sitio en **https://amante.github.io/HHRR/**.
 
-## Próximos pasos
-- Migrar a build con Vite/React para entregar JS transpileado y minificado.
-- Backend (Node + Express + PostgreSQL) con JWT, multiempresa y RBAC.
+> Nota: Esta demo es 100% estática con CDN (React, ReactDOM, Tailwind, Babel). En producción real migraremos a build (Vite) y API.
+
+## Qué incluye el panel Admin
+- Resumen de **tareas pendientes** y **desglose por prioridad** y **por empresa**.
+- Listado de todas las solicitudes con filtros (búsqueda, estado, prioridad, empresa).
+- Cambio de estado rápido (➡️ avanza estados).
