@@ -26,7 +26,7 @@ export function ensureSeedAndMigrate() {
   }
   if (changed) localStorage.setItem(KEYS.users, JSON.stringify(users))
 
-  // Agents (staff interno)
+  // Agents
   let agents = JSON.parse(localStorage.getItem(KEYS.agents) || 'null')
   if (!agents) {
     agents = [
@@ -37,7 +37,7 @@ export function ensureSeedAndMigrate() {
     localStorage.setItem(KEYS.agents, JSON.stringify(agents))
   }
 
-  // Companies (migrar de legacy si aplica)
+  // Companies
   let companies = JSON.parse(localStorage.getItem(KEYS.companies) || 'null')
   const legacy = JSON.parse(localStorage.getItem(KEYS.legacyCompany) || 'null')
   if (!companies) {

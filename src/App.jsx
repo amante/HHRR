@@ -9,7 +9,7 @@ function Navbar({ user, onLogout }) {
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-2xl bg-black text-white flex items-center justify-center font-bold">M</div>
           <div className="text-xl font-semibold">MoMa HR</div>
-          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.2</span>
+          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.2.1</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="hidden sm:inline text-gray-500">Sesión:</span>
@@ -229,7 +229,7 @@ function TaskDetail({ open, onClose, task, onUpdate }) {
                 <input className="flex-1 px-3 py-2 rounded-xl border" placeholder="Adjuntar por URL (opcional)" value={link} onChange={e=>setLink(e.target.value)} />
                 <button onClick={addComment} className="px-3 py-2 rounded-xl bg-black text-white">Añadir</button>
               </div>
-              {(task.comments || []).length === 0 ? <div className="text-sm text-gray-500">Sin comentarios.</div> : (
+              {(task.comments || []).length ? (
                 <ul className="divide-y">
                   {task.comments.map(c => (
                     <li key={c.id} className="py-2">
@@ -243,7 +243,7 @@ function TaskDetail({ open, onClose, task, onUpdate }) {
                     </li>
                   ))}
                 </ul>
-              )}
+              ) : <div className="text-sm text-gray-500">Sin comentarios.</div>}
             </div>
           </div>
         </div>
@@ -313,7 +313,8 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
   const doBulk = (action) => {
     if (selected.size === 0) return
     const ids = new Set(selected)
-    let changed = false
+    let changed = False
+    changed = False
     const next = tasks.map(t => {
       if (!ids.has(t.id)) return t
       changed = true
@@ -374,7 +375,6 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
       >
         {canEdit && !showCompanyColumn && <TaskComposer onAdd={addTask} companyId={companyId || companies[0]?.id} />}
 
-        {/* Bulk actions toolbar */}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <span className="text-sm text-gray-600">Seleccionadas: {selected.size}</span>
           <button onClick={()=>setSelected(new Set(tasks.map(t=>t.id)))} className="px-2 py-1 rounded-lg border">Seleccionar todo</button>
@@ -463,7 +463,6 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
           </table>
         </div>
 
-        {/* Pagination */}
         <div className="mt-3 flex items-center justify-between">
           <div className="text-sm text-gray-600">Página {page} de {totalPages}</div>
           <div className="flex gap-2">
