@@ -9,7 +9,7 @@ function Navbar({ user, onLogout }) {
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-2xl bg-black text-white flex items-center justify-center font-bold">M</div>
           <div className="text-xl font-semibold">MoMa HR</div>
-          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.3</span>
+          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.4</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="hidden sm:inline text-gray-500">Sesión:</span>
@@ -217,7 +217,7 @@ function TaskDetail({ open, onClose, task, onUpdate }) {
             <div className="text-sm text-gray-500 mb-1">Asignar a agente</div>
             <select className="px-3 py-2 rounded-xl border" value={task.assignedTo || ''} onChange={e=>saveAssign(e.target.value || null)}>
               <option value="">Sin asignar</option>
-              {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {Storage.loadAgents().map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
 
@@ -276,7 +276,6 @@ function AgentsManager() {
     setAgents(next); Storage.saveAgents(next); setEditingId(null); setEditName('')
   }
   const remove = (id) => {
-    // Preguntar si reasignar o dejar sin asignación
     const tasks = Storage.loadTasks()
     const affected = tasks.filter(t => t.assignedTo === id).length
     let reassignTo = ''
@@ -294,7 +293,6 @@ function AgentsManager() {
     const nextAgents = agents.filter(a => a.id !== id)
     Storage.saveAgents(nextAgents)
     setAgents(nextAgents)
-
     if (affected > 0) {
       const nextTasks = tasks.map(t => t.assignedTo === id ? ({ ...t, assignedTo: targetId }) : t)
       Storage.saveTasks(nextTasks)
@@ -338,12 +336,186 @@ function AgentsManager() {
   )
 }
 
+/* ---------- KANBAN BOARD ---------- */
+function KanbanBoard({ canEdit, companyId=null, forAdmin=false }) {
+  const [tasks, setTasks] = useState(Storage.loadTasks())
+  const companies = Storage.loadCompanies()
+  const agents = Storage.loadAgents()
+
+  // filters persistence (reuse admin/company keys)
+  const key = (forAdmin ? 'admin' : (companyId || 'company'))
+  const persisted = Storage.loadFilters()[key] || {}
+  const [search, setSearch] = useState(persisted.search || '')
+  const [priorityFilter, setPriorityFilter] = useState(persisted.priority || 'Todas')
+  const [companyFilter, setCompanyFilter] = useState(persisted.company || 'Todas')
+  const [fromCreated, setFromCreated] = useState(persisted.fromCreated || '')
+  const [toCreated, setToCreated] = useState(persisted.toCreated || '')
+  const [fromDue, setFromDue] = useState(persisted.fromDue || '')
+  const [toDue, setToDue] = useState(persisted.toDue || '')
+  const [onlyOverdue, setOnlyOverdue] = useState(!!persisted.onlyOverdue)
+
+  useEffect(()=>{ setTasks(Storage.loadTasks()) }, [])
+
+  useEffect(() => {
+    const all = Storage.loadFilters()
+    all[key] = { ...(all[key]||{}), search, priority: priorityFilter, company: companyFilter, fromCreated, toCreated, fromDue, toDue, onlyOverdue }
+    Storage.saveFilters(all)
+  }, [search, priorityFilter, companyFilter, fromCreated, toCreated, fromDue, toDue, onlyOverdue])
+
+  const inRange = (iso, from, to) => {
+    if (!iso) return false
+    const d = new Date(iso).toISOString().slice(0,10)
+    if (from && d < from) return false
+    if (to && d > to) return false
+    return true
+  }
+
+  const filtered = useMemo(() => {
+    let arr = tasks
+    if (companyId) arr = arr.filter(t => t.companyId === companyId)
+    if (forAdmin && companyFilter !== 'Todas') arr = arr.filter(t => t.companyId === companyFilter)
+    if (priorityFilter !== 'Todas') arr = arr.filter(t => t.priority === priorityFilter)
+    if (search) {
+      const s = search.toLowerCase()
+      arr = arr.filter(t => (t.title + ' ' + t.description).toLowerCase().includes(s))
+    }
+    if (fromCreated || toCreated) arr = arr.filter(t => inRange(t.createdAt, fromCreated, toCreated))
+    if (fromDue || toDue) arr = arr.filter(t => inRange(t.dueDate, fromDue, toDue))
+    if (onlyOverdue) arr = arr.filter(t => isOverdue(t.dueDate) && t.status !== 'Completada')
+    return arr
+  }, [tasks, companyId, companyFilter, priorityFilter, search, fromCreated, toCreated, fromDue, toDue, onlyOverdue, forAdmin])
+
+  const updateTask = (id, patch) => {
+    const next = tasks.map(t => t.id === id ? { ...t, ...patch } : t)
+    setTasks(next); Storage.saveTasks(next)
+  }
+  const duplicateTask = (t) => {
+    const copy = { ...t, id: uid(), title: t.title + ' (copia)', status: 'Nueva', createdAt: new Date().toISOString() }
+    const next = [copy, ...tasks]; setTasks(next); Storage.saveTasks(next)
+  }
+
+  // detail modal
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailTask, setDetailTask] = useState(null)
+  const openDetail = (t) => { setDetailTask(t); setDetailOpen(true) }
+  const closeDetail = () => setDetailOpen(false)
+  const updateDetail = (t) => { updateTask(t.id, t); setDetailTask(t) }
+
+  const columns = ['Nueva', 'En Progreso', 'Completada']
+  const byCol = Object.fromEntries(columns.map(c => [c, filtered.filter(t => t.status === c)]))
+
+  const onDragStart = (e, id) => {
+    e.dataTransfer.setData('text/plain', id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const onDrop = (e, status) => {
+    e.preventDefault()
+    const id = e.dataTransfer.getData('text/plain')
+    if (!id) return
+    const task = tasks.find(t => t.id === id)
+    if (!task) return
+    if (task.status === status) return
+    updateTask(id, { status })
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        <Stat label="Total" value={filtered.length} />
+        <Stat label="Pendientes" value={filtered.filter(t=>t.status!=='Completada').length} />
+        <Stat label="Vencidas" value={filtered.filter(t=>isOverdue(t.dueDate) && t.status!=='Completada').length} />
+      </div>
+
+      <Card title="Filtros"
+        right={<button onClick={()=>{setFromCreated('');setToCreated('');setFromDue('');setToDue('');setOnlyOverdue(false);setSearch('');setPriorityFilter('Todas');setCompanyFilter('Todas')}} className="px-3 py-2 rounded-xl border">Limpiar</button>}>
+        <div className="grid gap-2 sm:grid-cols-6">
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..." className="px-3 py-2 rounded-xl border sm:col-span-2" />
+          <select value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value)} className="px-3 py-2 rounded-xl border">
+            {['Todas', ...PRIORITY].map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          {forAdmin && (
+            <select value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)} className="px-3 py-2 rounded-xl border">
+              <option value="Todas">Todas las empresas</option>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          <label className="text-sm text-gray-600 inline-flex items-center gap-2">
+            <input type="checkbox" checked={onlyOverdue} onChange={e=>setOnlyOverdue(e.target.checked)} />
+            Solo vencidas
+          </label>
+        </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-6">
+          <div className="sm:col-span-3 flex items-center gap-2">
+            <span className="text-sm text-gray-600 w-28">Creada de</span>
+            <input type="date" value={fromCreated} onChange={e=>setFromCreated(e.target.value)} className="px-3 py-2 rounded-xl border" />
+            <span>a</span>
+            <input type="date" value={toCreated} onChange={e=>setToCreated(e.target.value)} className="px-3 py-2 rounded-xl border" />
+          </div>
+          <div className="sm:col-span-3 flex items-center gap-2">
+            <span className="text-sm text-gray-600 w-28">Vence de</span>
+            <input type="date" value={fromDue} onChange={e=>setFromDue(e.target.value)} className="px-3 py-2 rounded-xl border" />
+            <span>a</span>
+            <input type="date" value={toDue} onChange={e=>setToDue(e.target.value)} className="px-3 py-2 rounded-xl border" />
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {columns.map(col => (
+          <div key={col}
+            onDragOver={e=>e.preventDefault()}
+            onDrop={e=>onDrop(e, col)}
+            className="rounded-3xl border bg-white flex flex-col min-h-[300px]">
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div className="font-semibold">{col}</div>
+              <Badge tone={col==='Completada'?'green':col==='En Progreso'?'blue':'gray'}>{byCol[col].length}</Badge>
+            </div>
+            <div className="p-3 space-y-3">
+              {byCol[col].map(t => (
+                <div key={t.id}
+                  draggable={canEdit}
+                  onDragStart={e=>onDragStart(e, t.id)}
+                  className={"rounded-2xl border p-3 bg-white hover:shadow-sm " + (isOverdue(t.dueDate) && t.status!=='Completada' ? 'border-red-300' : 'border-gray-200')}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{t.title}</div>
+                      <div className="text-xs text-gray-600">{t.description || '—'}</div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span title="Prioridad"><Badge tone={t.priority==='Alta'?'red':t.priority==='Media'?'amber':'gray'}>{t.priority[0]}</Badge></span>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                    <span>Vence: <b className={isOverdue(t.dueDate) && t.status!=='Completada' ? 'text-red-600' : ''}>{fmtDate(t.dueDate)}</b></span>
+                    <span>Creada: {fmtDate(t.createdAt)}</span>
+                    {forAdmin && <span className="truncate">Empresa: {companies.find(c=>c.id===t.companyId)?.name || '—'}</span>}
+                    <span className="truncate">Agente: {agents.find(a=>a.id===t.assignedTo)?.name || '—'}</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button onClick={()=>duplicateTask(t)} className="px-2 py-1 rounded-lg border" title="Duplicar">📄</button>
+                    <button onClick={()=>openDetail(t)} className="px-2 py-1 rounded-lg border" title="Detalle">📝</button>
+                  </div>
+                </div>
+              ))}
+              {byCol[col].length === 0 && (
+                <div className="text-sm text-gray-400 py-6 text-center">Suelta aquí para mover a “{col}”.</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <TaskDetail open={detailOpen} onClose={closeDetail} task={detailTask || {}} onUpdate={updateDetail} />
+    </div>
+  )
+}
+
+/* ---------- TABLE (from v1.3) ---------- */
 function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=false }) {
   const [tasks, setTasks] = useState(Storage.loadTasks())
   const companies = Storage.loadCompanies()
   const agents = Storage.loadAgents()
 
-  // filters + persistence
   const persisted = Storage.loadFilters()
   const initialKey = (showCompanyColumn ? 'admin' : (companyId || 'company'))
   const initialFilters = persisted[initialKey] || {}
@@ -366,13 +538,7 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
   // pagination
   const [page, setPage] = useState(1)
   const pageSize = 10
-
-  // selection for bulk actions
   const [selected, setSelected] = useState(new Set())
-  const toggleSelect = (id) => setSelected(prev => {
-    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
-  })
-  const clearSelection = () => setSelected(new Set())
 
   useEffect(()=>{ setTasks(Storage.loadTasks()) }, [])
 
@@ -409,7 +575,6 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const pageItems = filtered.slice((page-1)*pageSize, page*pageSize)
 
-  // stats
   const stats = useMemo(() => ({
     total: filtered.length,
     pendientes: filtered.filter(t => t.status !== 'Completada').length,
@@ -432,8 +597,6 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
     const copy = { ...t, id: uid(), title: t.title + ' (copia)', status: 'Nueva', createdAt: new Date().toISOString() }
     addTask(copy)
   }
-
-  // bulk actions
   const doBulk = (action) => {
     if (selected.size === 0 && action.type !== 'duplicate') return
     const ids = new Set(selected)
@@ -454,9 +617,8 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
         return t
       })
     }
-    if (changed) { setTasks(next); Storage.saveTasks(next); clearSelection() }
+    if (changed) { setTasks(next); Storage.saveTasks(next); setSelected(new Set()) }
   }
-
   const exportCSV = () => {
     const rows = filtered.map(t => ({
       id: t.id, titulo: t.title, descripcion: t.description,
@@ -469,14 +631,12 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
     downloadCSV('tareas.csv', rows)
   }
 
-  // detail modal state
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTask, setDetailTask] = useState(null)
   const openDetail = (t) => { setDetailTask(t); setDetailOpen(true) }
   const closeDetail = () => setDetailOpen(false)
   const updateDetail = (t) => { replaceTask(t); setDetailTask(t) }
 
-  // inline editing
   const [editingId, setEditingId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
@@ -489,6 +649,8 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
     updateTask(t.id, { title, description })
     cancelEdit()
   }
+
+  const [selectedAll, setSelectedAll] = useState(false)
 
   return (
     <div className="space-y-4">
@@ -542,24 +704,24 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
           </div>
         </div>
 
-        {canEdit && !showCompanyColumn && <TaskComposer onAdd={addTask} companyId={companyId || companies[0]?.id} />}
+        {canEdit && !showCompanyColumn && <TaskComposer onAdd={(task)=>{const next=[task,...tasks]; setTasks(next); Storage.saveTasks(next)}} companyId={companyId || companies[0]?.id} />}
 
         {/* Bulk actions toolbar */}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <span className="text-sm text-gray-600">Seleccionadas: {selected.size}</span>
           <button onClick={()=>setSelected(new Set(pageItems.map(t=>t.id)))} className="px-2 py-1 rounded-lg border">Sel. página</button>
           <button onClick={()=>setSelected(new Set(filtered.map(t=>t.id)))} className="px-2 py-1 rounded-lg border">Sel. todo (filtro)</button>
-          <button onClick={clearSelection} className="px-2 py-1 rounded-lg border">Limpiar</button>
+          <button onClick={()=>setSelected(new Set())} className="px-2 py-1 rounded-lg border">Limpiar</button>
           <span className="text-sm text-gray-600 ml-2">Cambiar a:</span>
-          <select onChange={e=>doBulk({type:'status', value:e.target.value})} className="px-2 py-1 rounded-lg border">
+          <select onChange={e=>{ if(e.target.value) { doBulk({type:'status', value:e.target.value}); e.target.value=''} }} className="px-2 py-1 rounded-lg border">
             <option value="">Estado…</option>
             {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select onChange={e=>doBulk({type:'priority', value:e.target.value})} className="px-2 py-1 rounded-lg border">
+          <select onChange={e=>{ if(e.target.value) { doBulk({type:'priority', value:e.target.value}); e.target.value=''} }} className="px-2 py-1 rounded-lg border">
             <option value="">Prioridad…</option>
             {PRIORITY.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select onChange={e=>doBulk({type:'assign', value:e.target.value})} className="px-2 py-1 rounded-lg border">
+          <select onChange={e=>{ doBulk({type:'assign', value:e.target.value}) }} className="px-2 py-1 rounded-lg border">
             <option value="">Asignar a…</option>
             <option value="">(Sin asignar)</option>
             {Storage.loadAgents().map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -572,9 +734,11 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
             <thead>
               <tr className="text-left text-gray-500 border-b">
                 <th className="py-2 pr-2"><input type="checkbox" onChange={e=>{
-                  if (e.target.checked) setSelected(new Set(pageItems.map(t=>t.id)))
-                  else clearSelection()
-                }} /></th>
+                  const chk = e.target.checked
+                  setSelectedAll(chk)
+                  if (chk) setSelected(new Set(pageItems.map(t=>t.id)))
+                  else setSelected(new Set())
+                }} checked={selectedAll}/></th>
                 <th className="py-2 pr-4">Título</th>
                 {showCompanyColumn && <th className="py-2 pr-4">Empresa</th>}
                 <th className="py-2 pr-4">Prioridad</th>
@@ -588,7 +752,9 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
             <tbody>
               {pageItems.map((t) => (
                 <tr key={t.id} className="border-b hover:bg-gray-50/60">
-                  <td className="py-2 pr-2"><input type="checkbox" checked={selected.has(t.id)} onChange={()=>toggleSelect(t.id)} /></td>
+                  <td className="py-2 pr-2"><input type="checkbox" checked={selected.has(t.id)} onChange={()=>{
+                    setSelected(prev => { const n=new Set(prev); n.has(t.id)?n.delete(t.id):n.add(t.id); return n })
+                  }} /></td>
                   <td className="py-2 pr-4">
                     {editingId === t.id ? (
                       <div className="space-y-1">
@@ -653,7 +819,6 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
           </table>
         </div>
 
-        {/* Pagination */}
         <div className="mt-3 flex items-center justify-between">
           <div className="text-sm text-gray-600">Página {page} de {totalPages}</div>
           <div className="flex gap-2">
@@ -671,11 +836,24 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
 function EmpresaPage({ session }) {
   const companies = Storage.loadCompanies()
   const company = companies.find(c => c.id === session.companyId) || companies[0]
+  const view = Storage.loadView()
+  const [mode, setMode] = useState(view.empresa || 'tabla')
+  useEffect(()=>{
+    const v = Storage.loadView(); v.empresa = mode; Storage.saveView(v)
+  }, [mode])
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Panel Empresa</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Panel Empresa</h2>
+        <div className="border rounded-xl p-1 text-sm">
+          <button onClick={()=>setMode('tabla')} className={'px-3 py-1.5 rounded-lg ' + (mode==='tabla'?'bg-black text-white':'')}>Tabla</button>
+          <button onClick={()=>setMode('kanban')} className={'px-3 py-1.5 rounded-lg ' + (mode==='kanban'?'bg-black text-white':'')}>Kanban</button>
+        </div>
+      </div>
       <CompanyInfo canEdit={true} company={company} />
-      <TasksTable canEdit={true} companyId={company?.id} />
+      {mode==='kanban'
+        ? <KanbanBoard canEdit={true} companyId={company?.id} />
+        : <TasksTable canEdit={true} companyId={company?.id} />}
     </div>
   )
 }
@@ -722,12 +900,25 @@ function AdminSummary() {
   )
 }
 function AdminPage() {
+  const view = Storage.loadView()
+  const [mode, setMode] = useState(view.admin || 'kanban')
+  useEffect(()=>{
+    const v = Storage.loadView(); v.admin = mode; Storage.saveView(v)
+  }, [mode])
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Panel Administrador</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Panel Administrador</h2>
+        <div className="border rounded-xl p-1 text-sm">
+          <button onClick={()=>setMode('tabla')} className={'px-3 py-1.5 rounded-lg ' + (mode==='tabla'?'bg-black text-white':'')}>Tabla</button>
+          <button onClick={()=>setMode('kanban')} className={'px-3 py-1.5 rounded-lg ' + (mode==='kanban'?'bg-black text-white':'')}>Kanban</button>
+        </div>
+      </div>
       <Card title="Resumen"><AdminSummary /></Card>
       <AgentsManager />
-      <TasksTable canEdit={true} showCompanyColumn={true} forAdmin={true} />
+      {mode==='kanban'
+        ? <KanbanBoard canEdit={true} forAdmin={true} />
+        : <TasksTable canEdit={true} showCompanyColumn={true} forAdmin={true} />}
     </div>
   )
 }

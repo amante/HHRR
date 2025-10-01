@@ -1,10 +1,10 @@
-# MoMa HR — v1.3 (Vite + Tailwind) • Admin avanzado
+# MoMa HR — v1.4 (Vite + Tailwind) • Tablero Kanban con drag & drop
 
-Incluye **GitHub Actions** (`.github/workflows/pages.yml`) y mejoras del Admin:
-
-- **Filtros pro**: rango de fechas (creada y vence), *solo vencidas*, persistencia de filtros en `localStorage`.
-- **Productividad**: duplicar tarea (individual y masivo), edición **inline** de título/descr. (Enter para guardar, Escape para cancelar).
-- **Agentes (CRUD)**: alta/edición/eliminación de agentes; reasignación en cascada al eliminar.
+Novedades:
+- **Tablero Kanban** (Admin y Empresa) con **arrastrar & soltar** entre estados (HTML5 DnD, sin dependencias).
+- Persistencia de **vista** (Tabla/Kanban) por perfil en `localStorage`.
+- Mantiene filtros, CRUD de agentes y todo lo de v1.3.
+- Incluye **GitHub Actions** para **Pages** (`.github/workflows/pages.yml`).
 
 ## Publicación
 1. Sube todo este contenido al repo `amante.github.io/HHRR` (rama `main`).
@@ -23,3 +23,4 @@ npm run preview   # http://localhost:4173/HHRR/
 Notas:
 - `vite.config.js` ya tiene `base: '/HHRR/'`.
 - `index.html` usa rutas relativas (`./src/main.jsx`, `favicon.svg`).
+- DnD: arrastra una tarjeta y suéltala sobre la columna destino; queda arriba de esa columna.

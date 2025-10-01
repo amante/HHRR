@@ -7,7 +7,8 @@ const KEYS = {
   agents: 'momaHR_agents',
   session: 'momaHR_session',
   legacyCompany: 'momaHR_company',
-  filters: 'momaHR_filters'
+  filters: 'momaHR_filters',
+  view: 'momaHR_view'
 }
 
 export function ensureSeedAndMigrate() {
@@ -84,10 +85,8 @@ export function ensureSeedAndMigrate() {
     if (fixed) localStorage.setItem(KEYS.tasks, JSON.stringify(tasks))
   }
 
-  // Filters seed (optional default)
-  if (!localStorage.getItem(KEYS.filters)) {
-    localStorage.setItem(KEYS.filters, JSON.stringify({}))
-  }
+  if (!localStorage.getItem(KEYS.filters)) localStorage.setItem(KEYS.filters, JSON.stringify({}))
+  if (!localStorage.getItem(KEYS.view)) localStorage.setItem(KEYS.view, JSON.stringify({admin: 'kanban', empresa: 'tabla'}))
 }
 
 export const Storage = {
@@ -105,4 +104,6 @@ export const Storage = {
   resetDemo: () => { Object.values(KEYS).forEach(k => localStorage.removeItem(k)); ensureSeedAndMigrate() },
   loadFilters: () => JSON.parse(localStorage.getItem(KEYS.filters) || '{}'),
   saveFilters: (f) => localStorage.setItem(KEYS.filters, JSON.stringify(f)),
+  loadView: () => JSON.parse(localStorage.getItem(KEYS.view) || '{}'),
+  saveView: (v) => localStorage.setItem(KEYS.view, JSON.stringify(v)),
 }
