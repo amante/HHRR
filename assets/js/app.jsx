@@ -1,4 +1,4 @@
-/* MoMa HR — v1.1 (GitHub Pages-ready con Admin)
+/* MoMa HR — v1.1.1 (GitHub Pages-ready con Admin y migración de datos)
  * Perfiles: Empresa, Usuario (consulta), Admin (gestiona solicitudes de Empresa)
  * Credenciales demo:
  *   Admin:   admin@demo.com   / 123456
@@ -13,48 +13,81 @@ const STORAGE_KEYS = {
   companies: "momaHR_companies",
   tasks: "momaHR_tasks",
   session: "momaHR_session",
+  // Clave antigua de versiones previas
+  company_legacy: "momaHR_company",
 };
 
-function seedIfEmpty() {
-  // Seed users
-  const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || "null");
-  if (!users) {
-    const demoUsers = [
+function ensureSeedAndMigrate() {
+  // 1) Usuarios: si no existen, seed completo; si existen y no hay Admin, agregarlo.
+  let users = JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || "null");
+  if (!users) users = [];
+  let changed = false;
+  if (users.length === 0) {
+    users = [
       { id: "admin1", email: "admin@demo.com", password: "123456", role: "Admin", name: "MoMa Administrator" },
       { id: "u1", email: "empresa@demo.com", password: "123456", role: "Empresa", name: "Demo Company Admin", companyId: "c1" },
       { id: "u2", email: "usuario@demo.com", password: "123456", role: "Usuario", name: "Demo Consulta", companyId: "c1" },
     ];
-    localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(demoUsers));
+    changed = true;
+  } else if (!users.some(u => u.role === "Admin")) {
+    users = [
+      { id: "admin1", email: "admin@demo.com", password: "123456", role: "Admin", name: "MoMa Administrator" },
+      ...users
+    ];
+    changed = true;
   }
-  // Seed companies (multi-empresa listo)
-  const companies = JSON.parse(localStorage.getItem(STORAGE_KEYS.companies) || "null");
+  if (changed) localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));
+
+  // 2) Empresas: migrar de clave legacy si corresponde; si no hay, crear c1
+  let companies = JSON.parse(localStorage.getItem(STORAGE_KEYS.companies) || "null");
+  const legacy = JSON.parse(localStorage.getItem(STORAGE_KEYS.company_legacy) || "null");
   if (!companies) {
-    const now = new Date().toISOString();
-    const demoCompanies = [{
-      id: "c1",
-      name: "MoMa Technologies S.A.",
-      rut: "76.123.456-7",
-      industry: "Tecnología",
-      address: "Av. Innovación 123, Santiago, CL",
-      phone: "+56 2 1234 5678",
-      website: "https://moma.example",
-      createdAt: now,
-      updatedAt: now,
-    }];
-    localStorage.setItem(STORAGE_KEYS.companies, JSON.stringify(demoCompanies));
+    if (legacy) {
+      companies = [{ ...legacy, id: legacy.id || "c1" }];
+    } else {
+      const now = new Date().toISOString();
+      companies = [{
+        id: "c1",
+        name: "MoMa Technologies S.A.",
+        rut: "76.123.456-7",
+        industry: "Tecnología",
+        address: "Av. Innovación 123, Santiago, CL",
+        phone: "+56 2 1234 5678",
+        website: "https://moma.example",
+        createdAt: now,
+        updatedAt: now,
+      }];
+    }
+    localStorage.setItem(STORAGE_KEYS.companies, JSON.stringify(companies));
   }
-  // Seed tasks
-  const tasks = JSON.parse(localStorage.getItem(STORAGE_KEYS.tasks) || "null");
+  if (legacy) {
+    // Limpia clave vieja para evitar confusiones
+    localStorage.removeItem(STORAGE_KEYS.company_legacy);
+  }
+
+  // 3) Tareas: si no hay, seed; si las hay, garantizar companyId
+  let tasks = JSON.parse(localStorage.getItem(STORAGE_KEYS.tasks) || "null");
   if (!tasks) {
     const today = new Date();
     const addDays = (d) => new Date(today.getTime() + d * 86400000);
-    const demoTasks = [
-      { id: cryptoRandomId(), companyId: "c1", title: "Publicar oferta: Desarrollador Full Stack", description: "Crear la requisición, publicar en portales y LinkedIn.", priority: "Alta", status: "Nueva",        dueDate: addDays(3).toISOString(),  createdAt: today.toISOString(), createdBy: "u1" },
-      { id: cryptoRandomId(), companyId: "c1", title: "Actualizar políticas de home office",          description: "Revisión legal y comunicación interna.",                  priority: "Media", status: "En Progreso", dueDate: addDays(10).toISOString(), createdAt: today.toISOString(), createdBy: "u1" },
-      { id: cryptoRandomId(), companyId: "c1", title: "Onboarding de 3 QA Analysts",                 description: "Coordinar inducción y accesos.",                         priority: "Alta", status: "Completada",   dueDate: addDays(-2).toISOString(), createdAt: today.toISOString(), createdBy: "u1" },
+    tasks = [
+      { id: cryptoRandomId(), companyId: companies[0].id, title: "Publicar oferta: Desarrollador Full Stack", description: "Crear la requisición, publicar en portales y LinkedIn.", priority: "Alta", status: "Nueva",        dueDate: addDays(3).toISOString(),  createdAt: today.toISOString(), createdBy: "u1" },
+      { id: cryptoRandomId(), companyId: companies[0].id, title: "Actualizar políticas de home office",          description: "Revisión legal y comunicación interna.",                  priority: "Media", status: "En Progreso", dueDate: addDays(10).toISOString(), createdAt: today.toISOString(), createdBy: "u1" },
+      { id: cryptoRandomId(), companyId: companies[0].id, title: "Onboarding de 3 QA Analysts",                 description: "Coordinar inducción y accesos.",                         priority: "Alta", status: "Completada",   dueDate: addDays(-2).toISOString(), createdAt: today.toISOString(), createdBy: "u1" },
     ];
-    localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(demoTasks));
+    localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks));
+  } else {
+    let fixed = false;
+    const defaultCompanyId = companies[0]?.id || "c1";
+    tasks.forEach(t => { if (!t.companyId) { t.companyId = defaultCompanyId; fixed = true; } });
+    if (fixed) localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks));
   }
+}
+
+function resetDemo() {
+  Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+  ensureSeedAndMigrate();
+  alert("Demo restablecida. Vuelve a intentar con: admin@demo.com / 123456");
 }
 
 function cryptoRandomId() {
@@ -65,18 +98,7 @@ function cryptoRandomId() {
 const loadUsers = () => JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || "[]");
 const loadCompanies = () => JSON.parse(localStorage.getItem(STORAGE_KEYS.companies) || "[]");
 const saveCompanies = (companies) => localStorage.setItem(STORAGE_KEYS.companies, JSON.stringify(companies));
-const loadTasks = () => {
-  const tasks = JSON.parse(localStorage.getItem(STORAGE_KEYS.tasks) || "[]");
-  // retrocompatibilidad: si alguna tarea no tiene companyId y hay 1 empresa, asignarla c1
-  const companies = loadCompanies();
-  if (companies.length === 1) {
-    const cId = companies[0].id;
-    let changed = false;
-    tasks.forEach(t => { if (!t.companyId) { t.companyId = cId; changed = true; } });
-    if (changed) localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks));
-  }
-  return tasks;
-};
+const loadTasks = () => JSON.parse(localStorage.getItem(STORAGE_KEYS.tasks) || "[]");
 const saveTasks = (tasks) => localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks));
 const loadSession = () => JSON.parse(localStorage.getItem(STORAGE_KEYS.session) || "null");
 const saveSession = (session) => localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
@@ -90,7 +112,7 @@ function Navbar({ user, onLogout }) {
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-2xl bg-black text-white flex items-center justify-center font-bold">M</div>
           <div className="text-xl font-semibold">MoMa HR</div>
-          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.1</span>
+          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.1.1</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="hidden sm:inline text-gray-500">Sesión:</span>
@@ -173,6 +195,8 @@ function Login({ onLogin, defaultRole = "Empresa" }) {
     else { setEmail("admin@demo.com"); setPassword("123456"); }
   };
 
+  const doReset = () => { resetDemo(); setEmail(""); setPassword(""); setError(""); };
+
   return (
     <div className="min-h-[80vh] grid place-items-center px-4">
       <div className="w-full max-w-md border rounded-3xl bg-white p-6">
@@ -218,6 +242,9 @@ function Login({ onLogin, defaultRole = "Empresa" }) {
               <button type="button" onClick={() => fillDemo("Empresa")} className="px-2 py-1 rounded-lg border">Empresa demo</button>
               <button type="button" onClick={() => fillDemo("Usuario")} className="px-2 py-1 rounded-lg border">Usuario demo</button>
               <button type="button" onClick={() => fillDemo("Admin")}   className="px-2 py-1 rounded-lg border">Admin demo</button>
+            </div>
+            <div className="mt-4">
+              <button type="button" onClick={doReset} className="text-xs underline">Restablecer demo (limpiar datos locales)</button>
             </div>
           </div>
         </form>
@@ -386,7 +413,7 @@ function TasksManager({ canEdit, companyId, showCompanyColumn = false }) {
                 {filtered.map((t) => (
                   <tr key={t.id} className="border-b hover:bg-gray-50/60">
                     <td className="py-2 pr-4">
-                      <div className="font-medium">{t.title}</div>
+                      <div className="font-medium">{t.title}</</div>
                       <div className="text-gray-500 text-xs max-w-lg">{t.description}</div>
                     </td>
                     {showCompanyColumn && (
@@ -542,7 +569,7 @@ function AdminSummary() {
 // ---- App root ---------------------------------------------------------------
 function App() {
   const [session, setSession] = useState(loadSession());
-  useEffect(() => { seedIfEmpty(); const s = loadSession(); if (s) setSession(s); }, []);
+  useEffect(() => { ensureSeedAndMigrate(); const s = loadSession(); if (s) setSession(s); }, []);
   if (!session) return <Login onLogin={(s) => setSession(s)} />;
   const logout = () => { clearSession(); setSession(null); };
   return (

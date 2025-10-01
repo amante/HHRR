@@ -1,9 +1,13 @@
-# MoMa HR — v1.1 con Administración (GitHub Pages listo)
+# MoMa HR — v1.1.1 con Administración (GitHub Pages listo)
 
 Perfiles: **Admin**, **Empresa**, **Usuario**.  
 El **Admin** puede ver y gestionar (cambiar estado) las **solicitudes** (tareas) de todas las empresas.
 
-## URL esperada del proyecto
+## Importante (tu caso)
+En instalaciones previas de la demo, el navegador pudo guardar datos antiguos sin usuario Admin.  
+Esta versión **migra/crea** el Admin automáticamente y agrega un botón de **“Restablecer demo”** en el login.
+
+## URL esperada
 - https://amante.github.io/HHRR/
 
 ## Estructura
@@ -25,14 +29,10 @@ HHRR/
 - Usuario: `usuario@demo.com` / `123456`
 
 ## Cómo publicar
-1. Crea (o usa) el repo **HHRR** en `amante.github.io`.
-2. Sube el contenido del ZIP a la rama **main**.
-3. Revisa **Actions** → *Deploy to GitHub Pages*.
-4. Verás el sitio en **https://amante.github.io/HHRR/**.
+1. Sube el contenido del ZIP al repo **HHRR** (rama **main**).
+2. Revisa **Actions** → *Deploy to GitHub Pages*.
+3. Abre **https://amante.github.io/HHRR/** y, si ves errores de credenciales:
+   - Haz clic en **“Restablecer demo (limpiar datos locales)”** en la pantalla de login, o
+   - Limpia el **Local Storage** del sitio y recarga.
 
-> Nota: Esta demo es 100% estática con CDN (React, ReactDOM, Tailwind, Babel). En producción real migraremos a build (Vite) y API.
-
-## Qué incluye el panel Admin
-- Resumen de **tareas pendientes** y **desglose por prioridad** y **por empresa**.
-- Listado de todas las solicitudes con filtros (búsqueda, estado, prioridad, empresa).
-- Cambio de estado rápido (➡️ avanza estados).
+> Demo estática con CDNs (React, ReactDOM, Tailwind, Babel). En producción real migraremos a build (Vite) y API.
