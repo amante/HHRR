@@ -1,0 +1,4 @@
+/* MoMa HR — v1 (GitHub Pages)
+ * La UI usa Tailwind desde CDN. Este archivo es para estilos opcionales propios.
+ */
+html, body { height: 100%; }
