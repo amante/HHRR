@@ -9,7 +9,7 @@ function Navbar({ user, onLogout }) {
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-2xl bg-black text-white flex items-center justify-center font-bold">M</div>
           <div className="text-xl font-semibold">MoMa HR</div>
-          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.2.3</span>
+          <span className="ml-3 text-xs px-2 py-1 rounded-full bg-gray-100 border">v1.3</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="hidden sm:inline text-gray-500">Sesión:</span>
@@ -252,16 +252,116 @@ function TaskDetail({ open, onClose, task, onUpdate }) {
   )
 }
 
+function AgentsManager() {
+  const [agents, setAgents] = useState(Storage.loadAgents())
+  const [name, setName] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
+  useEffect(() => setAgents(Storage.loadAgents()), [])
+
+  const existsName = (n, exceptId=null) => agents.some(a => a.name.trim().toLowerCase() === n.trim().toLowerCase() && a.id !== exceptId)
+
+  const add = () => {
+    const n = name.trim()
+    if (!n) return
+    if (existsName(n)) { alert('Ya existe un agente con ese nombre'); return }
+    const next = [...agents, { id: uid(), name: n }]
+    setAgents(next); Storage.saveAgents(next); setName('')
+  }
+  const saveEdit = (id) => {
+    const n = editName.trim()
+    if (!n) { setEditingId(null); return }
+    if (existsName(n, id)) { alert('Ya existe un agente con ese nombre'); return }
+    const next = agents.map(a => a.id === id ? { ...a, name: n } : a)
+    setAgents(next); Storage.saveAgents(next); setEditingId(null); setEditName('')
+  }
+  const remove = (id) => {
+    // Preguntar si reasignar o dejar sin asignación
+    const tasks = Storage.loadTasks()
+    const affected = tasks.filter(t => t.assignedTo === id).length
+    let reassignTo = ''
+    if (affected > 0) {
+      const names = agents.filter(a => a.id !== id).map(a => a.name).join(', ')
+      const msg = `Este agente tiene ${affected} tareas asignadas. Escribe el NOMBRE exacto de otro agente para reasignar, o deja vacío para dejar sin asignación.\nAgentes disponibles: ${names}`
+      reassignTo = prompt(msg) || ''
+    }
+    let targetId = null
+    if (reassignTo.trim()) {
+      const found = agents.find(a => a.name.trim().toLowerCase() === reassignTo.trim().toLowerCase())
+      if (!found) { alert('No se encontró ese agente. Se dejarán sin asignación.'); }
+      else targetId = found.id
+    }
+    const nextAgents = agents.filter(a => a.id !== id)
+    Storage.saveAgents(nextAgents)
+    setAgents(nextAgents)
+
+    if (affected > 0) {
+      const nextTasks = tasks.map(t => t.assignedTo === id ? ({ ...t, assignedTo: targetId }) : t)
+      Storage.saveTasks(nextTasks)
+      alert(`Listo. ${affected} tareas fueron ${targetId ? 'reasignadas' : 'dejadas sin asignación'}.`)
+    }
+  }
+
+  return (
+    <Card title="Agentes internos (CRUD)"
+      right={
+        <div className="flex gap-2">
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre del agente" className="px-3 py-2 rounded-xl border" />
+          <button onClick={add} className="px-3 py-2 rounded-xl bg-black text-white">Añadir</button>
+        </div>
+      }>
+      <div className="space-y-2">
+        {agents.map(a => (
+          <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-xl border">
+            {editingId === a.id ? (
+              <div className="flex-1 mr-2">
+                <input className="w-full px-3 py-2 rounded-xl border" value={editName} onChange={e=>setEditName(e.target.value)}
+                  onKeyDown={e=>{
+                    if (e.key==='Enter') saveEdit(a.id)
+                    if (e.key==='Escape') { setEditingId(null); setEditName('') }
+                  }} />
+              </div>
+            ) : (
+              <div className="font-medium">{a.name}</div>
+            )}
+            <div className="flex items-center gap-2">
+              {editingId === a.id
+                ? <button onClick={()=>saveEdit(a.id)} className="px-3 py-1.5 rounded-xl border">Guardar</button>
+                : <button onClick={()=>{setEditingId(a.id); setEditName(a.name)}} className="px-3 py-1.5 rounded-xl border">Editar</button>}
+              <button onClick={()=>remove(a.id)} className="px-3 py-1.5 rounded-xl border">Eliminar</button>
+            </div>
+          </div>
+        ))}
+        {agents.length === 0 && <div className="text-sm text-gray-500">No hay agentes registrados.</div>}
+      </div>
+    </Card>
+  )
+}
+
 function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=false }) {
   const [tasks, setTasks] = useState(Storage.loadTasks())
   const companies = Storage.loadCompanies()
   const agents = Storage.loadAgents()
 
-  // filters
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('Todos')
-  const [priorityFilter, setPriorityFilter] = useState('Todas')
-  const [companyFilter, setCompanyFilter] = useState('Todas')
+  // filters + persistence
+  const persisted = Storage.loadFilters()
+  const initialKey = (showCompanyColumn ? 'admin' : (companyId || 'company'))
+  const initialFilters = persisted[initialKey] || {}
+  const [search, setSearch] = useState(initialFilters.search || '')
+  const [statusFilter, setStatusFilter] = useState(initialFilters.status || 'Todos')
+  const [priorityFilter, setPriorityFilter] = useState(initialFilters.priority || 'Todas')
+  const [companyFilter, setCompanyFilter] = useState(initialFilters.company || 'Todas')
+  const [fromCreated, setFromCreated] = useState(initialFilters.fromCreated || '')
+  const [toCreated, setToCreated] = useState(initialFilters.toCreated || '')
+  const [fromDue, setFromDue] = useState(initialFilters.fromDue || '')
+  const [toDue, setToDue] = useState(initialFilters.toDue || '')
+  const [onlyOverdue, setOnlyOverdue] = useState(!!initialFilters.onlyOverdue)
+
+  useEffect(() => {
+    const f = { search, status: statusFilter, priority: priorityFilter, company: companyFilter, fromCreated, toCreated, fromDue, toDue, onlyOverdue }
+    const all = Storage.loadFilters()
+    all[initialKey] = f; Storage.saveFilters(all)
+  }, [search, statusFilter, priorityFilter, companyFilter, fromCreated, toCreated, fromDue, toDue, onlyOverdue])
 
   // pagination
   const [page, setPage] = useState(1)
@@ -276,6 +376,14 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
 
   useEffect(()=>{ setTasks(Storage.loadTasks()) }, [])
 
+  const inRange = (iso, from, to) => {
+    if (!iso) return false
+    const d = new Date(iso).toISOString().slice(0,10)
+    if (from && d < from) return false
+    if (to && d > to) return false
+    return true
+  }
+
   const filtered = useMemo(() => {
     let arr = tasks
     if (companyId) arr = arr.filter(t => t.companyId === companyId)
@@ -286,8 +394,17 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
       const s = search.toLowerCase()
       arr = arr.filter(t => (t.title + ' ' + t.description).toLowerCase().includes(s))
     }
+    if (fromCreated || toCreated) {
+      arr = arr.filter(t => inRange(t.createdAt, fromCreated, toCreated))
+    }
+    if (fromDue || toDue) {
+      arr = arr.filter(t => inRange(t.dueDate, fromDue, toDue))
+    }
+    if (onlyOverdue) {
+      arr = arr.filter(t => isOverdue(t.dueDate) && t.status !== 'Completada')
+    }
     return arr
-  }, [tasks, companyId, search, statusFilter, priorityFilter, companyFilter, showCompanyColumn])
+  }, [tasks, companyId, search, statusFilter, priorityFilter, companyFilter, showCompanyColumn, fromCreated, toCreated, fromDue, toDue, onlyOverdue])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const pageItems = filtered.slice((page-1)*pageSize, page*pageSize)
@@ -305,23 +422,38 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
   const updateTask = (id, patch) => {
     const next = tasks.map(t => t.id === id ? { ...t, ...patch } : t); setTasks(next); Storage.saveTasks(next)
   }
+  const replaceTask = (task) => {
+    const next = tasks.map(t => t.id === task.id ? task : t); setTasks(next); Storage.saveTasks(next)
+  }
   const removeTask = (id) => {
     const next = tasks.filter(t => t.id !== id); setTasks(next); Storage.saveTasks(next)
+  }
+  const duplicateTask = (t) => {
+    const copy = { ...t, id: uid(), title: t.title + ' (copia)', status: 'Nueva', createdAt: new Date().toISOString() }
+    addTask(copy)
   }
 
   // bulk actions
   const doBulk = (action) => {
-    if (selected.size === 0) return
+    if (selected.size === 0 && action.type !== 'duplicate') return
     const ids = new Set(selected)
     let changed = false
-    const next = tasks.map(t => {
-      if (!ids.has(t.id)) return t
-      changed = true
-      if (action.type === 'status') return { ...t, status: action.value }
-      if (action.type === 'priority') return { ...t, priority: action.value }
-      if (action.type === 'assign') return { ...t, assignedTo: action.value || null }
-      return t
-    })
+    let next = tasks
+    if (action.type === 'duplicate') {
+      const toDup = tasks.filter(t => selected.has(t.id))
+      const copies = toDup.map(t => ({ ...t, id: uid(), title: t.title + ' (copia)', status: 'Nueva', createdAt: new Date().toISOString() }))
+      next = [...copies, ...tasks]
+      changed = copies.length > 0
+    } else {
+      next = tasks.map(t => {
+        if (!ids.has(t.id)) return t
+        changed = true
+        if (action.type === 'status') return { ...t, status: action.value }
+        if (action.type === 'priority') return { ...t, priority: action.value }
+        if (action.type === 'assign') return { ...t, assignedTo: action.value || null }
+        return t
+      })
+    }
     if (changed) { setTasks(next); Storage.saveTasks(next); clearSelection() }
   }
 
@@ -329,6 +461,7 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
     const rows = filtered.map(t => ({
       id: t.id, titulo: t.title, descripcion: t.description,
       prioridad: t.priority, estado: t.status, vence: t.dueDate,
+      creada: t.createdAt,
       empresa: companies.find(c => c.id === t.companyId)?.name || '',
       asignado: agents.find(a => a.id === t.assignedTo)?.name || ''
     }))
@@ -341,7 +474,21 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
   const [detailTask, setDetailTask] = useState(null)
   const openDetail = (t) => { setDetailTask(t); setDetailOpen(true) }
   const closeDetail = () => setDetailOpen(false)
-  const updateDetail = (t) => { updateTask(t.id, t); setDetailTask(t) }
+  const updateDetail = (t) => { replaceTask(t); setDetailTask(t) }
+
+  // inline editing
+  const [editingId, setEditingId] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const startEdit = (t) => { setEditingId(t.id); setEditTitle(t.title); setEditDesc(t.description || '') }
+  const cancelEdit = () => { setEditingId(null); setEditTitle(''); setEditDesc('') }
+  const saveEdit = (t) => {
+    const title = editTitle.trim()
+    const description = editDesc
+    if (!title) { cancelEdit(); return }
+    updateTask(t.id, { title, description })
+    cancelEdit()
+  }
 
   return (
     <div className="space-y-4">
@@ -372,11 +519,36 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
           </div>
         }
       >
+        {/* Advanced filters */}
+        <div className="mb-3 grid gap-2 sm:grid-cols-6">
+          <div className="sm:col-span-3 flex items-center gap-2">
+            <label className="text-sm text-gray-600 w-28">Creada de</label>
+            <input type="date" value={fromCreated} onChange={e=>setFromCreated(e.target.value)} className="px-3 py-2 rounded-xl border" />
+            <span>a</span>
+            <input type="date" value={toCreated} onChange={e=>setToCreated(e.target.value)} className="px-3 py-2 rounded-xl border" />
+          </div>
+          <div className="sm:col-span-3 flex items-center gap-2">
+            <label className="text-sm text-gray-600 w-28">Vence de</label>
+            <input type="date" value={fromDue} onChange={e=>setFromDue(e.target.value)} className="px-3 py-2 rounded-xl border" />
+            <span>a</span>
+            <input type="date" value={toDue} onChange={e=>setToDue(e.target.value)} className="px-3 py-2 rounded-xl border" />
+          </div>
+          <div className="sm:col-span-6 flex items-center gap-3">
+            <label className="text-sm text-gray-600">
+              <input type="checkbox" className="mr-2" checked={onlyOverdue} onChange={e=>setOnlyOverdue(e.target.checked)} />
+              Solo vencidas (no completadas)
+            </label>
+            <button onClick={()=>{setFromCreated(''); setToCreated(''); setFromDue(''); setToDue(''); setOnlyOverdue(false)}} className="px-3 py-1.5 rounded-xl border">Limpiar filtros fecha</button>
+          </div>
+        </div>
+
         {canEdit && !showCompanyColumn && <TaskComposer onAdd={addTask} companyId={companyId || companies[0]?.id} />}
 
+        {/* Bulk actions toolbar */}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <span className="text-sm text-gray-600">Seleccionadas: {selected.size}</span>
-          <button onClick={()=>setSelected(new Set(tasks.map(t=>t.id)))} className="px-2 py-1 rounded-lg border">Seleccionar todo</button>
+          <button onClick={()=>setSelected(new Set(pageItems.map(t=>t.id)))} className="px-2 py-1 rounded-lg border">Sel. página</button>
+          <button onClick={()=>setSelected(new Set(filtered.map(t=>t.id)))} className="px-2 py-1 rounded-lg border">Sel. todo (filtro)</button>
           <button onClick={clearSelection} className="px-2 py-1 rounded-lg border">Limpiar</button>
           <span className="text-sm text-gray-600 ml-2">Cambiar a:</span>
           <select onChange={e=>doBulk({type:'status', value:e.target.value})} className="px-2 py-1 rounded-lg border">
@@ -392,6 +564,7 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
             <option value="">(Sin asignar)</option>
             {Storage.loadAgents().map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
+          <button onClick={()=>doBulk({type:'duplicate'})} className="px-2 py-1 rounded-lg border">Duplicar seleccionadas</button>
         </div>
 
         <div className="overflow-x-auto">
@@ -407,6 +580,7 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
                 <th className="py-2 pr-4">Prioridad</th>
                 <th className="py-2 pr-4">Estado</th>
                 <th className="py-2 pr-4">Asignado</th>
+                <th className="py-2 pr-4">Creada</th>
                 <th className="py-2 pr-4">Vence</th>
                 <th className="py-2 pr-4">Acciones</th>
               </tr>
@@ -416,8 +590,23 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
                 <tr key={t.id} className="border-b hover:bg-gray-50/60">
                   <td className="py-2 pr-2"><input type="checkbox" checked={selected.has(t.id)} onChange={()=>toggleSelect(t.id)} /></td>
                   <td className="py-2 pr-4">
-                    <div className="font-medium">{t.title}</div>
-                    <div className="text-gray-500 text-xs max-w-lg">{t.description}</div>
+                    {editingId === t.id ? (
+                      <div className="space-y-1">
+                        <input className="w-full px-2 py-1 rounded-lg border" value={editTitle} onChange={e=>setEditTitle(e.target.value)}
+                          onKeyDown={e=>{ if (e.key==='Enter') saveEdit(t); if (e.key==='Escape') cancelEdit() }} />
+                        <input className="w-full px-2 py-1 rounded-lg border text-xs" value={editDesc} onChange={e=>setEditDesc(e.target.value)}
+                          onKeyDown={e=>{ if (e.key==='Enter') saveEdit(t); if (e.key==='Escape') cancelEdit() }} placeholder="Descripción (opcional)" />
+                        <div className="flex gap-2">
+                          <button onClick={()=>saveEdit(t)} className="px-2 py-1 rounded-lg border">Guardar</button>
+                          <button onClick={cancelEdit} className="px-2 py-1 rounded-lg border">Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div onDoubleClick={()=>canEdit && startEdit(t)}>
+                        <div className="font-medium">{t.title}</div>
+                        <div className="text-gray-500 text-xs max-w-lg">{t.description}</div>
+                      </div>
+                    )}
                   </td>
                   {showCompanyColumn && (
                     <td className="py-2 pr-4">
@@ -444,6 +633,7 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
                       <span className="text-xs">{agents.find(a => a.id === t.assignedTo)?.name || '—'}</span>
                     )}
                   </td>
+                  <td className="py-2 pr-4">{fmtDate(t.createdAt)}</td>
                   <td className="py-2 pr-4">
                     <span className={isOverdue(t.dueDate) && t.status !== 'Completada' ? 'text-red-600 font-medium' : ''}>
                       {fmtDate(t.dueDate)}
@@ -451,6 +641,7 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
                   </td>
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-2">
+                      <button onClick={()=>duplicateTask(t)} className="px-2 py-1 rounded-lg border" title="Duplicar">📄</button>
                       <button onClick={()=>updateTask(t.id, { status: STATUS[(STATUS.indexOf(t.status)+1)%STATUS.length] })} className="px-2 py-1 rounded-lg border" title="Avanzar estado">➡️</button>
                       <button onClick={()=>openDetail(t)} className="px-2 py-1 rounded-lg border" title="Detalle">📝</button>
                       {canEdit && !showCompanyColumn && <button onClick={()=>removeTask(t.id)} className="px-2 py-1 rounded-lg border" title="Eliminar">🗑️</button>}
@@ -462,6 +653,7 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
           </table>
         </div>
 
+        {/* Pagination */}
         <div className="mt-3 flex items-center justify-between">
           <div className="text-sm text-gray-600">Página {page} de {totalPages}</div>
           <div className="flex gap-2">
@@ -534,6 +726,7 @@ function AdminPage() {
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       <h2 className="text-2xl font-semibold">Panel Administrador</h2>
       <Card title="Resumen"><AdminSummary /></Card>
+      <AgentsManager />
       <TasksTable canEdit={true} showCompanyColumn={true} forAdmin={true} />
     </div>
   )

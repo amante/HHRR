@@ -6,7 +6,8 @@ const KEYS = {
   tasks: 'momaHR_tasks',
   agents: 'momaHR_agents',
   session: 'momaHR_session',
-  legacyCompany: 'momaHR_company'
+  legacyCompany: 'momaHR_company',
+  filters: 'momaHR_filters'
 }
 
 export function ensureSeedAndMigrate() {
@@ -82,6 +83,11 @@ export function ensureSeedAndMigrate() {
     })
     if (fixed) localStorage.setItem(KEYS.tasks, JSON.stringify(tasks))
   }
+
+  // Filters seed (optional default)
+  if (!localStorage.getItem(KEYS.filters)) {
+    localStorage.setItem(KEYS.filters, JSON.stringify({}))
+  }
 }
 
 export const Storage = {
@@ -97,4 +103,6 @@ export const Storage = {
   saveSession: (s) => localStorage.setItem(KEYS.session, JSON.stringify(s)),
   clearSession: () => localStorage.removeItem(KEYS.session),
   resetDemo: () => { Object.values(KEYS).forEach(k => localStorage.removeItem(k)); ensureSeedAndMigrate() },
+  loadFilters: () => JSON.parse(localStorage.getItem(KEYS.filters) || '{}'),
+  saveFilters: (f) => localStorage.setItem(KEYS.filters, JSON.stringify(f)),
 }
