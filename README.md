@@ -1,26 +1,53 @@
-# MoMa HR — v1.1.1 con Administración (GitHub Pages listo)
+# MoMa HR — v1.2 (Vite) • Admin mejorado + GitHub Pages
 
-Perfiles: **Admin**, **Empresa**, **Usuario**.  
-El **Admin** puede ver y gestionar (cambiar estado) las **solicitudes** (tareas) de todas las empresas.
+Este paquete cumple con tus puntos **(1) Mejoras de Admin (sin backend)** y **(2) Frontend pro con Vite**.
 
-## Importante (tu caso)
-En instalaciones previas de la demo, el navegador pudo guardar datos antiguos sin usuario Admin.  
-Esta versión **migra/crea** el Admin automáticamente y agrega un botón de **“Restablecer demo”** en el login.
+## Qué incluye
+- **Vite + React** con `base: '/HHRR/'` para publicar en `amante.github.io/HHRR`.
+- **GitHub Actions** que hacen *build + deploy* automático a Pages.
+- **Admin mejorado (sin backend)**:
+  - Asignación de tareas a **agentes internos** (seed: Ana, Carlos, Sofía).
+  - **Comentarios** por tarea con adjuntos **por URL**.
+  - **Acciones masivas** (estado, prioridad, asignación).
+  - **Paginación** (10 por página) y **exportación CSV** del listado filtrado.
+- **Empresa**: edita datos de su empresa + CRUD de tareas.
+- **Usuario**: consulta en solo lectura.
 
-## URL esperada
-- https://amante.github.io/HHRR/
+> Persistencia en `localStorage` (demo). En producción real conectaremos a API.
 
 ## Estructura
 ```
 HHRR/
 ├─ index.html
-├─ 404.html
-├─ .nojekyll
-├─ assets/
-│  ├─ js/app.jsx
-│  ├─ css/styles.css
-│  └─ img/favicon.svg
+├─ public/
+│  ├─ 404.html
+│  ├─ .nojekyll
+│  └─ favicon.svg
+├─ src/
+│  ├─ main.jsx
+│  ├─ App.jsx
+│  ├─ storage.js
+│  └─ utils.js
+├─ package.json
+├─ vite.config.js
 └─ .github/workflows/pages.yml
+```
+
+## Publicación en GitHub Pages
+1. Crea/usa el repo **HHRR** en tu cuenta `amante.github.io`.
+2. Sube **todo** este contenido a la rama **main**.
+3. Ve a **Actions** y observa **Build and Deploy to GitHub Pages**.  
+   Al terminar, tu sitio queda en: `https://amante.github.io/HHRR/`.
+
+## Dev local (opcional)
+```bash
+npm ci
+npm run dev
+# http://localhost:5173/HHRR/  (Vite usará base /HHRR/ en rutas)
+```
+```bash
+npm run build && npm run preview
+# preview en http://localhost:4173/HHRR/
 ```
 
 ## Credenciales demo
@@ -28,11 +55,7 @@ HHRR/
 - Empresa: `empresa@demo.com` / `123456`
 - Usuario: `usuario@demo.com` / `123456`
 
-## Cómo publicar
-1. Sube el contenido del ZIP al repo **HHRR** (rama **main**).
-2. Revisa **Actions** → *Deploy to GitHub Pages*.
-3. Abre **https://amante.github.io/HHRR/** y, si ves errores de credenciales:
-   - Haz clic en **“Restablecer demo (limpiar datos locales)”** en la pantalla de login, o
-   - Limpia el **Local Storage** del sitio y recarga.
-
-> Demo estática con CDNs (React, ReactDOM, Tailwind, Babel). En producción real migraremos a build (Vite) y API.
+## Notas
+- Para adjuntos sin backend, se admiten **URLs** (Drive, S3, etc.). Podemos ampliar a *Data URLs* con límite de tamaño.
+- Si migras desde versiones previas, el sistema **migrará** datos y creará el Admin si no existe.
+- La UI usa Tailwind desde CDN por simplicidad. Podemos integrarlo como dependencia (PostCSS) si lo prefieres.

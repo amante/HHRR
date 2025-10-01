@@ -1,24 +1,16 @@
 <!doctype html>
 <html lang="es">
   <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MoMa HR — v1.1.1</title>
-    <meta name="description" content="Sistema web de RRHH (demo) con login Empresa/Usuario/Admin, ficha de empresa y tareas." />
-    <link rel="icon" href="./assets/img/favicon.svg">
-    <!-- Tailwind Play CDN (para demo rápida) -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MoMa HR — v1.2 (Vite)</title>
+    <meta name="description" content="Sistema web de RRHH con login Admin/Empresa/Usuario. Admin con asignación, comentarios, adjuntos por URL, acciones masivas, paginación y exportación CSV." />
+    <link rel="icon" href="/HHRR/favicon.svg" />
+    <!-- Tailwind CDN solo para demo (en producción real: integrar Tailwind con PostCSS) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React 18 UMD (producción) + ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel para transpilar JSX en el navegador (solo demo). En producción real, usar build. -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link rel="stylesheet" href="./assets/css/styles.css" />
   </head>
   <body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
     <div id="root"></div>
-    <!-- App React (JSX) -->
-    <script type="text/babel" data-presets="env,react" src="./assets/js/app.jsx"></script>
+    <script type="module" src="/HHRR/src/main.jsx"></script>
   </body>
 </html>
