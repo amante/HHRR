@@ -1,4 +1,4 @@
-# MoMa HR — v1.2.1 (Vite + Tailwind PostCSS) • Fixes
+# MoMa HR — v1.2.2 (Vite + Tailwind PostCSS) • Fixes
 
 Soluciona los errores que viste:
 1) **Tailwind CDN** → Ahora Tailwind está instalado como **PostCSS plugin** (sin warnings de producción).

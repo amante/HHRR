@@ -313,8 +313,8 @@ function TasksTable({ canEdit, companyId, showCompanyColumn=false, forAdmin=fals
   const doBulk = (action) => {
     if (selected.size === 0) return
     const ids = new Set(selected)
-    let changed = False
-    changed = False
+    let changed = false
+    changed = false
     const next = tasks.map(t => {
       if (!ids.has(t.id)) return t
       changed = true
